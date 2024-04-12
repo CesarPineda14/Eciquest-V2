@@ -17,8 +17,8 @@ const io = socketIo(server, {
     methods: ["GET", "POST"]
   }
 });
-let salas = {}
 let players = {}; 
+let salas = {};
 let questions = [
     // Sistemas
     {categoria: "sistemas", pregunta: "¿Cuál es el principal componente de un sistema computacional?", respuestas: ["CPU", "Monitor", "Teclado", "Disco Duro"], correcta: "CPU"},
@@ -40,21 +40,7 @@ let questions = [
     {categoria: "logica", pregunta: "¿Qué estudia la lógica?", respuestas: ["Comportamiento humano", "Estructura de las computadoras", "Principios del razonamiento correcto", "Geometría y matemáticas"], correcta: "Principios del razonamiento correcto"},
     {categoria: "logica", pregunta: "¿Qué es un silogismo?", respuestas: ["Una figura literaria", "Una ecuación matemática", "Un tipo de razonamiento deductivo", "Una forma de lenguaje de programación"], correcta: "Un tipo de razonamiento deductivo"},
 ]
-let currentQuestionIndex = 0; 
 let correctAnswer = ""
-
-function sendQuestion(socket, categoriaSelect) {
-    let preguntaDiccionario = questions.filter(porta => porta.categoria == categoriaSelect);
-    if (preguntaDiccionario.length === 0) {
-        console.log(categoriaSelect)
-        socket.emit('error', 'No hay preguntas disponibles para la categoría seleccionada.');
-        return; 
-    }
-    let preguntaRandom = preguntaDiccionario[Math.floor(Math.random() * preguntaDiccionario.length)];
-    correctAnswer = preguntaRandom.correcta 
-    socket.emit('pregunta', { pregunta: preguntaRandom.pregunta, respuestas: preguntaRandom.respuestas});
-}
-
 
 
 
@@ -64,24 +50,47 @@ io.on("connection", (socket) => {
 
 
     socket.on('requestQuestions', (categoria) => {
-        
-        sendQuestion(socket, categoria);
+        const roomId = socket.roomId;
+        const preguntaDiccionario = questions.filter(q => q.categoria == categoria);
+        if (preguntaDiccionario.length === 0) {
+            socket.to(roomId).emit('error', 'No hay preguntas disponibles para la categoría seleccionada.');
+            return;
+        }
+        let preguntaRandom = preguntaDiccionario[Math.floor(Math.random() * preguntaDiccionario.length)];
+        salas[roomId].currentQuestion = preguntaRandom.pregunta;
+        salas[roomId].correctAnswer = preguntaRandom.correcta;
+        console.log(salas[roomId].currentQuestion)
+        io.to(roomId).emit('newQuestion', { pregunta: preguntaRandom.pregunta, respuestas: preguntaRandom.respuestas });
       });
 
-    socket.on("answer", (data) => {
-        console.log(`Answer received from ${socket.id}:`, data);
-        console.log("esperada:", correctAnswer)
-        if (data == correctAnswer) {
-            players[socket.id].score += 10;
-            console.log(players[socket.id].score) 
-            socket.emit("correct_answer", { score: players[socket.id].score });
-        } else {
-            console.log(players[socket.id].score)
-            socket.emit("incorrect_answer", { score: players[socket.id].score });
-        }
-        
-        
+      socket.on('iniciarSorteo', ({ roomId }) => {
+            let ganador = Math.random()
+            io.to(roomId).emit('realizarSorteo', { numero:ganador});
     });
+
+      socket.on('joinRoom', ({ roomId }) => {
+        socket.roomId = roomId;
+        socket.join(roomId);
+        console.log(`Player ${socket.id} joined room ${roomId}`);
+        if (!salas[roomId]) {
+            salas[roomId] = { players: {}, questions: [] };
+        }
+        salas[roomId].players[socket.id] = { score: 0 };
+        io.to(roomId).emit('playerJoined', { playerId: socket.id });
+    });
+
+
+    socket.on("answer", ({ roomId, answer }) => {
+        let isCorrect = answer === salas[roomId].correctAnswer;
+        if (isCorrect) {
+            salas[roomId].players[socket.id].score += 10;
+        }
+        // io.to(roomId).emit("answerResult", { playerId: socket.id, isCorrect, score: salas[roomId].players[socket.id].score });
+        socket.emit("answerResult", { playerId: socket.id, isCorrect, score: salas[roomId].players[socket.id].score });
+    });
+        
+        
+    
 
     socket.on("disconnect", () => {
         console.log("Player disconnected", socket.id);
