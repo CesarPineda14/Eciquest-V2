@@ -127,12 +127,10 @@ io.on("connection", (socket) => {
         salas[roomId].responseOrder = 0;
         salas[roomId].pendingResponses = Object.keys(salas[roomId].players).length;
         // console.log(`Current question for room ${roomId}: ${salas[roomId].currentQuestion}`)
-        console.log(nombreUsuario, "nombreUsuario")
         io.to(roomId).emit('newQuestion', { pregunta: preguntaRandom.pregunta, respuestas: preguntaRandom.respuestas });
     });
     socket.on('setNombre', (nombre) => {
         nombreUsuario = nombre;
-        // console.log(nombreUsuario, "nombreUsuario")
     });
     socket.on('resetSorteo', roomId  => {
         if (salas[roomId]) {
@@ -143,17 +141,40 @@ io.on("connection", (socket) => {
 
     players[socket.id] = { score: 0 };
 
-    socket.on('joinRoom', ({ roomId }) => {
-        socket.roomId = roomId;
-        socket.join(roomId);
+    socket.on('joinRoom',  roomId  => {
+ 
         // console.log(`Player ${socket.id} joined room ${roomId}`);
-        if (!salas[roomId]) {
-            salas[roomId] = { players: {}, questions: [] , pendingResponses: 0 };
+        if (!salas[roomId[1]]) {
+            salas[roomId[1]] = { players: {}, questions: [] , pendingResponses: 0, numeroPreguntas: roomId[2], numeroJugadores: roomId[3], numeroPreguntasActuales: 0, numeroJugadoresActuales: 0};
         }
-        salas[roomId].pendingResponses++;
-        salas[roomId].players[socket.id] = { score: 0, nombre: nombreUsuario};
-        io.to(roomId).emit('playerJoined', { playerId: socket.id });
+        console.log("numeroJugadoresActuales",salas[roomId[1]].numeroJugadoresActuales)
+        console.log("numeroJugadores",salas[roomId[1]].numeroJugadores)
+        if(salas[roomId[1]].numeroJugadoresActuales < salas[roomId[1]].numeroJugadores){
+            socket.roomId = roomId[1];
+            socket.join(roomId[1]);
+            salas[roomId[1]].pendingResponses++;
+            salas[roomId[1]].numeroJugadoresActuales++;
+            
+            salas[roomId[1]].players[socket.id] = { score: 0, nombre: roomId[0]};
+            io.to(roomId[1]).emit('playerJoined', { playerId: socket.id });
+        }
+        else{
+            console.log("sala llena")
+        }
+        
     });
+
+    socket.on('ocupacion',salaId =>{
+
+        if (salas[salaId].numeroJugadoresActuales >= salas[salaId].numeroJugadores){
+            socket.emit("ocupancy", false);
+        }else{
+            socket.emit("ocupancy", true);
+        }
+        
+
+        
+    })
 
 
 
@@ -171,6 +192,7 @@ io.on("connection", (socket) => {
     
             // Emitir sorteo a todos los jugadores de la sala
             io.emit('realizarSorteo', { numero: ganador, sala:roomId });
+            salas[roomId].numeroPreguntasActuales++;
         } else {
             console.error(`Sala no válida o vacía: ${roomId}`);
         }
@@ -215,7 +237,7 @@ io.on("connection", (socket) => {
         if (salas[roomId].pendingResponses === 0) {
             let top3 = Object.keys(salas[roomId].players)
                 .map(playerId => ({
-                    nombre: salas[roomId].players[playerId].nombre || playerId, // Devuelve el nombre o el socketId si el nombre no está disponible
+                    nombre: salas[roomId].players[playerId].nombre || playerId, 
                     score: salas[roomId].players[playerId].score
                 }))
                 .sort((a, b) => b.score - a.score)
@@ -224,6 +246,13 @@ io.on("connection", (socket) => {
             io.emit("top3", { top3, roomId });
             console.log({ top3, roomId }, "top3");
         }
+    
+    if(salas[roomId].numeroPreguntasActuales == salas[roomId].numeroPreguntas){
+        console.log("fin del juego")
+        io.emit("GameOver", roomId);
+    }
+    
+    
     });
 
 
