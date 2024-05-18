@@ -1,0 +1,11 @@
+version: '2'
+services:
+  servicefacade:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gifted_feistel
+    ports:
+      - "4000:39000"
+
+
