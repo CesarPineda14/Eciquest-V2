@@ -247,7 +247,7 @@ io.on("connection", (socket) => {
             console.log({ top3, roomId }, "top3");
         }
     
-    if(salas[roomId].numeroPreguntasActuales == salas[roomId].numeroPreguntas){
+    if(salas[roomId].numeroPreguntasActuales === salas[roomId].numeroPreguntas){
         console.log("fin del juego")
         io.emit("GameOver", roomId);
     }
